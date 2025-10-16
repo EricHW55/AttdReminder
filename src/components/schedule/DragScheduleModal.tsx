@@ -9,9 +9,15 @@ interface DragScheduleModalProps {
     visible: boolean;
     onClose: () => void;
     onSubmit: (schedule: Omit<Schedule, 'id'>) => void;
+    existingSchedules: Schedule[]; // 기존 시간표 전달
 }
 
-export const DragScheduleModal: React.FC<DragScheduleModalProps> = ({ visible, onClose, onSubmit }) => {
+export const DragScheduleModal: React.FC<DragScheduleModalProps> = ({
+                                                                        visible,
+                                                                        onClose,
+                                                                        onSubmit,
+                                                                        existingSchedules
+}) => {
     const [step, setStep] = useState<'select' | 'details'>('select');
     const [name, setName] = useState('');
     const [room, setRoom] = useState('');
@@ -94,7 +100,10 @@ export const DragScheduleModal: React.FC<DragScheduleModalProps> = ({ visible, o
         <Modal visible={visible} animationType="slide" onRequestClose={handleClose}>
             <View style={styles.container}>
                 {step === 'select' ? (
-                    <DraggableTimetable onSelectionComplete={handleSelectionComplete} />
+                    <DraggableTimetable
+                        onSelectionComplete={handleSelectionComplete}
+                        existingSchedules={existingSchedules}
+                    />
                 ) : (
                     <View style={styles.detailsContainer}>
                         <Text style={styles.title}>수업 정보 입력</Text>

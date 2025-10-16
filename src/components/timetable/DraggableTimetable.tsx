@@ -8,12 +8,13 @@ import {
     PanResponder,
     TouchableOpacity,
 } from 'react-native';
-import { DayOfWeek, GridCell } from '@/src/types/schedule';
+import {DayOfWeek, GridCell, Schedule} from '@/src/types/schedule';
 import { DAYS, START_HOUR, END_HOUR, TIME_SLOT_MINUTES } from '@/src/constants/timeSlots';
-import { formatTime } from '@/src/utils/timeHelpers';
+import {formatTime, timeToMinutes} from '@/src/utils/timeHelpers';
 
-interface DraggableTimetableProps {
+interface DraggableTimetableWithSchedulesProps {
     onSelectionComplete: (cells: GridCell[]) => void;
+    existingSchedules: Schedule[]; // 기존 시간표
 }
 
 const CELL_HEIGHT = 55;
@@ -23,9 +24,10 @@ const TOTAL_GRID_HEIGHT = (END_HOUR - START_HOUR) * (60 / TIME_SLOT_MINUTES) * C
 const TOTAL_GRID_WIDTH = DAY_COLUMN_WIDTH * DAYS.length;
 
 
-export const DraggableTimetable: React.FC<DraggableTimetableProps> = ({
-                                                                          onSelectionComplete,
-                                                                      }) => {
+export const DraggableTimetable: React.FC<DraggableTimetableWithSchedulesProps> = ({
+                                                                                       onSelectionComplete,
+                                                                                       existingSchedules,
+                                                                                   }) => {
     const [selectedCells, setSelectedCells] = useState<GridCell[]>([]);
     const [isPaintMode, setIsPaintMode] = useState(false);
 
@@ -158,6 +160,43 @@ export const DraggableTimetable: React.FC<DraggableTimetableProps> = ({
         return selectedCells.some(cell => cell.day === day && cell.hour === hour && cell.minute === minute);
     };
 
+    // 기존 시간표 렌더링 함수
+    const renderScheduleForDay = (schedule: Schedule, day: DayOfWeek) => {
+        const dayOccurrences = schedule.occurrences?.filter(o => o.day === day) ?? [];
+        if (dayOccurrences.length === 0) return null;
+
+        return dayOccurrences.map((occ, idx) => {
+            const { startHour, startMinute, endHour, endMinute } = occ.timeSlot;
+
+            const startTotalMinutes = timeToMinutes(startHour, startMinute);
+            const endTotalMinutes = timeToMinutes(endHour, endMinute);
+
+            const top = ((startTotalMinutes - START_HOUR * 60) / TIME_SLOT_MINUTES) * CELL_HEIGHT;
+            const height = ((endTotalMinutes - startTotalMinutes) / TIME_SLOT_MINUTES) * CELL_HEIGHT;
+
+            if (top < 0 || top + height > hours.length * CELL_HEIGHT) return null;
+
+            return (
+                <View
+                    key={`${schedule.id}-${day}-${startHour}-${startMinute}-${idx}`}
+                    style={[
+                        styles.scheduleBlock,
+                        {
+                            top,
+                            height,
+                            backgroundColor: schedule.color,
+                            opacity: 0.7, // 기존 시간표는 약간 투명하게
+                        }
+                    ]}
+                    pointerEvents="none" // 드래그 방해하지 않도록
+                >
+                    <Text style={styles.scheduleText} numberOfLines={2}>{schedule.name}</Text>
+                    {schedule.room && <Text style={styles.scheduleRoomText}>{schedule.room}</Text>}
+                </View>
+            );
+        });
+    };
+
     return (
         <View style={styles.fullContainer}>
             <ScrollView style={styles.container} scrollEnabled={!isPaintMode}>
@@ -183,6 +222,7 @@ export const DraggableTimetable: React.FC<DraggableTimetableProps> = ({
                         <View style={styles.gridContainer}>
                             {DAYS.map(day => (
                                 <View key={day} style={[styles.dayColumn, { width: DAY_COLUMN_WIDTH }]}>
+                                    {/* 배경 그리드 */}
                                     {hours.map(({ hour, minute }) => (
                                         <View
                                             key={`${hour}-${minute}`}
@@ -193,6 +233,8 @@ export const DraggableTimetable: React.FC<DraggableTimetableProps> = ({
                                             ]}
                                         />
                                     ))}
+                                    {/* 기존 시간표 렌더링 */}
+                                    {existingSchedules.map(schedule => renderScheduleForDay(schedule, day))}
                                 </View>
                             ))}
                         </View>
@@ -205,7 +247,9 @@ export const DraggableTimetable: React.FC<DraggableTimetableProps> = ({
                     style={[styles.paintButton, isPaintMode && styles.paintButtonActive]}
                     onPress={handlePaintModeToggle}
                 >
-                    <Text style={styles.paintButtonText}>{isPaintMode ? '완료' : '칠하기'}</Text>
+                    <Text style={styles.paintButtonText}>
+                        {isPaintMode ? '완료' : '칠하기'}
+                    </Text>
                 </TouchableOpacity>
             </View>
         </View>
@@ -266,6 +310,7 @@ const styles = StyleSheet.create({
     },
     dayColumn: {
         width: DAY_COLUMN_WIDTH,
+        position: 'relative',
     },
     cell: {
         borderBottomWidth: 1,
@@ -277,6 +322,27 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(74, 158, 255, 0.4)',
         borderColor: 'rgba(74, 158, 255, 0.8)',
         borderWidth: 0.5,
+    },
+    scheduleBlock: {
+        position: 'absolute',
+        left: '2%',
+        right: '2%',
+        borderRadius: 8,
+        padding: 6,
+        justifyContent: 'space-between',
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.2)',
+    },
+    scheduleText: {
+        color: 'white',
+        fontWeight: 'bold',
+        fontSize: 11,
+    },
+    scheduleRoomText: {
+        color: 'white',
+        fontSize: 9,
+        opacity: 0.8,
+        textAlign: 'right',
     },
     gestureContainer: {
         position: 'absolute',
@@ -307,4 +373,3 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
     },
 });
-
