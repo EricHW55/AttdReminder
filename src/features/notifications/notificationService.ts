@@ -2,6 +2,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import type { Schedule, DayOfWeek } from '../../types/schedule';
+import {SchedulableTriggerInputTypes} from "expo-notifications";
 
 // 포그라운드에서도 무음 배너로 표시
 Notifications.setNotificationHandler({
@@ -78,14 +79,15 @@ export const notificationService = {
                 const triggerHour = Math.floor(triggerMinutes / 60);
                 const triggerMinute = triggerMinutes % 60;
 
-                // ✅ 주간 반복 트리거(안드로이드/ios 공통). type 넣지 마세요!
-                const trigger = {
-                    weekday,                 // 1(일) ~ 7(토)
+                // 주간 반복 트리거(안드로이드/ios 공통). type 넣지 마세요!
+                const trigger: Notifications.WeeklyTriggerInput = {
+                    type: SchedulableTriggerInputTypes.WEEKLY,
+                    weekday: weekday, // 'week_day'가 아닌 'weekday'를 사용합니다.
                     hour: triggerHour,
                     minute: triggerMinute,
-                    repeats: true,
-                    ...(Platform.OS === 'android' ? { channelId: 'classes' } : {}),
-                } as unknown as Notifications.NotificationTriggerInput;
+                    // repeats: true,
+                    channelId: 'classes',
+                };
 
                 await Notifications.scheduleNotificationAsync({
                     content: {
