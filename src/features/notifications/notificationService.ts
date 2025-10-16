@@ -71,9 +71,9 @@ export const notificationService = {
                         ? startMinutes - notification.minutes
                         : startMinutes + notification.minutes;
 
-                // 하루 범위 보정(필요 시 전/익일 이동 로직으로 확장 가능)
-                if (triggerMinutes < 0) triggerMinutes = 0;
-                if (triggerMinutes >= 24 * 60) triggerMinutes = 24 * 60 - 1;
+                // 하루 범위 보정
+                if (triggerMinutes < 0) triggerMinutes = 0;  // 0시 이전으로 가면 0시로 맞추기
+                if (triggerMinutes >= 24 * 60) triggerMinutes = 24 * 60 - 1; // 24시 이후로 가면 23:59로 맞추기
 
                 const triggerHour = Math.floor(triggerMinutes / 60);
                 const triggerMinute = triggerMinutes % 60;

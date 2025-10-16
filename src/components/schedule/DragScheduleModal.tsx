@@ -77,7 +77,10 @@ export const DragScheduleModal: React.FC<DragScheduleModalProps> = ({
             room: room.trim(),
             occurrences,
             color: selectedColor,
-            notifications: [{ id: '1', type: 'before', minutes: 10, enabled: true }], // 기본 알림 설정
+            notifications: [
+                { id: '1', type: 'before', minutes: 5, enabled: true },  // 5분 전 알림
+                { id: '2', type: 'after', minutes: 5, enabled: true },   // 5분 후 알림
+            ], // 기본 알림 설정
         };
         onSubmit(newSchedule);
         resetState(); // 상태 초기화 후 모달 닫기

@@ -25,13 +25,19 @@ export const ScheduleFormModal: React.FC<Props> = ({ visible, onClose, onSubmit,
     const [selectedColor, setSelectedColor] = useState(COLORS[0]);
     const [notifications, setNotifications] = useState<NotificationSetting[]>([]);
 
+    // [수정] 불필요해진 editingTime 상태를 삭제했습니다.
+
     useEffect(() => {
         if (visible) {
             setName(initialSchedule?.name ?? '');
             setRoom(initialSchedule?.room ?? '');
             setOccurrences(initialSchedule?.occurrences ?? [DEFAULT_OCCURRENCE]);
             setSelectedColor(initialSchedule?.color ?? COLORS[0]);
-            setNotifications(initialSchedule?.notifications ?? [{ id: '1', type: 'before', minutes: 10, enabled: true }]);
+            setNotifications(initialSchedule?.notifications ??
+                [{ id: '1', type: 'before', minutes: 5, enabled: true },
+                 { id: '2', type: 'after' , minutes: 5, enabled: true },
+                ]
+            );
         }
     }, [visible, initialSchedule]);
 
@@ -41,10 +47,9 @@ export const ScheduleFormModal: React.FC<Props> = ({ visible, onClose, onSubmit,
         setOccurrences(newOccurrences);
     };
 
-    const handleTimeChange = (index: number, field: keyof TimeSlot, value: string) => {
-        const numValue = parseInt(value, 10) || 0;
+    const updateTimeValue = (index: number, field: keyof TimeSlot, value: number) => {
         const newOccurrences = [...occurrences];
-        const newTimeSlot = { ...newOccurrences[index].timeSlot, [field]: numValue };
+        const newTimeSlot = { ...newOccurrences[index].timeSlot, [field]: value };
         newOccurrences[index] = { ...newOccurrences[index], timeSlot: newTimeSlot };
         setOccurrences(newOccurrences);
     };
@@ -77,6 +82,51 @@ export const ScheduleFormModal: React.FC<Props> = ({ visible, onClose, onSubmit,
         }
     };
 
+    // [수정] TimeInput 컴포넌트가 자체적으로 내부 상태를 갖도록 로직을 완전히 변경했습니다.
+    const TimeInput = ({ index, field }: { index: number; field: keyof TimeSlot }) => {
+        const isMinuteField = field.includes('Minute');
+        const parentValue = occurrences[index]?.timeSlot[field];
+
+        // 입력 중인 텍스트를 관리하는 내부 상태
+        const [localValue, setLocalValue] = useState(parentValue.toString());
+        const [isFocused, setIsFocused] = useState(false);
+
+        // 부모의 데이터가 변경될 때 (예: 모달이 새로 열릴 때) 내부 상태를 동기화합니다.
+        useEffect(() => {
+            if (!isFocused) {
+                setLocalValue(parentValue.toString());
+            }
+        }, [parentValue]);
+
+        const handleFocus = () => {
+            setIsFocused(true);
+        };
+
+        const handleBlur = () => {
+            setIsFocused(false);
+            const numValue = parseInt(localValue, 10);
+            const finalValue = isNaN(numValue) ? 0 : numValue;
+            // 포커스가 해제될 때만 부모의 상태를 업데이트합니다.
+            updateTimeValue(index, field, finalValue);
+        };
+
+        // 포커스 상태가 아닐 때만 '00' 포맷팅을 적용합니다.
+        const displayValue = !isFocused && isMinuteField ? localValue.padStart(2, '0') : localValue;
+
+        return (
+            <TextInput
+                style={styles.timeInput}
+                value={displayValue}
+                onChangeText={setLocalValue} // 입력 중에는 내부 상태만 변경
+                onFocus={handleFocus}
+                onBlur={handleBlur}
+                keyboardType="number-pad"
+                maxLength={2}
+                selectTextOnFocus
+            />
+        );
+    };
+
     return (
         <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
@@ -104,13 +154,13 @@ export const ScheduleFormModal: React.FC<Props> = ({ visible, onClose, onSubmit,
                                 ))}
                             </View>
                             <View style={styles.timeInputs}>
-                                <TextInput style={styles.timeInput} value={occurrence.timeSlot.startHour.toString()} onChangeText={text => handleTimeChange(index, 'startHour', text)} keyboardType="number-pad" maxLength={2} />
+                                <TimeInput index={index} field="startHour" />
                                 <Text style={styles.timeSeparator}>:</Text>
-                                <TextInput style={styles.timeInput} value={occurrence.timeSlot.startMinute.toString().padStart(2, '0')} onChangeText={text => handleTimeChange(index, 'startMinute', text)} keyboardType="number-pad" maxLength={2} />
+                                <TimeInput index={index} field="startMinute" />
                                 <Text style={styles.timeSeparator}>~</Text>
-                                <TextInput style={styles.timeInput} value={occurrence.timeSlot.endHour.toString()} onChangeText={text => handleTimeChange(index, 'endHour', text)} keyboardType="number-pad" maxLength={2} />
+                                <TimeInput index={index} field="endHour" />
                                 <Text style={styles.timeSeparator}>:</Text>
-                                <TextInput style={styles.timeInput} value={occurrence.timeSlot.endMinute.toString().padStart(2, '0')} onChangeText={text => handleTimeChange(index, 'endMinute', text)} keyboardType="number-pad" maxLength={2} />
+                                <TimeInput index={index} field="endMinute" />
                                 <TouchableOpacity onPress={() => removeOccurrence(index)}>
                                     <Text style={styles.removeButton}>-</Text>
                                 </TouchableOpacity>
@@ -125,8 +175,6 @@ export const ScheduleFormModal: React.FC<Props> = ({ visible, onClose, onSubmit,
                             <TouchableOpacity key={color} style={[styles.colorButton, { backgroundColor: color }, selectedColor === color && styles.colorButtonActive]} onPress={() => setSelectedColor(color)} />
                         ))}
                     </View>
-
-                    {/* 알림 설정 부분은 생략 (기존 코드와 유사) */}
 
                     <View style={styles.buttonRow}>
                         {isEdit && onDelete && (
@@ -171,3 +219,4 @@ const styles = StyleSheet.create({
     submitButton: { flex: 1, backgroundColor: '#4a9eff', paddingVertical: 14, borderRadius: 8, alignItems: 'center' },
     buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 });
+

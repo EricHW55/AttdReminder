@@ -2,7 +2,7 @@ import { DayOfWeek } from '../types/schedule';
 
 export const DAYS: DayOfWeek[] = ['월', '화', '수', '목', '금'];
 
-export const START_HOUR = 9;
+export const START_HOUR = 2;
 export const END_HOUR = 18;
 export const TIME_SLOT_MINUTES = 30; // 30분 단위
 
