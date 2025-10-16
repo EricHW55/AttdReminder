@@ -9,7 +9,7 @@ interface TimetableGridProps {
     onSchedulePress?: (schedule: Schedule) => void; // 필요하면 (schedule, occurrence)로 확장 가능
 }
 
-const CELL_HEIGHT = 60; // 30분당 높이
+const CELL_HEIGHT = 55; // 30분당 높이
 const TIME_COLUMN_WIDTH = 50;
 const DAY_COLUMN_WIDTH = (Dimensions.get('window').width - TIME_COLUMN_WIDTH) / DAYS.length;
 

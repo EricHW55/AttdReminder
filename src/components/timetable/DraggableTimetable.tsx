@@ -16,7 +16,7 @@ interface DraggableTimetableProps {
     onSelectionComplete: (cells: GridCell[]) => void;
 }
 
-const CELL_HEIGHT = 60;
+const CELL_HEIGHT = 55;
 const TIME_COLUMN_WIDTH = 50;
 const DAY_COLUMN_WIDTH = (Dimensions.get('window').width - TIME_COLUMN_WIDTH) / DAYS.length;
 const TOTAL_GRID_HEIGHT = (END_HOUR - START_HOUR) * (60 / TIME_SLOT_MINUTES) * CELL_HEIGHT;
