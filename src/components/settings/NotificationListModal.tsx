@@ -187,7 +187,7 @@ export const NotificationListModal: React.FC<NotificationListModalProps> = ({
                             style={styles.testButton}
                             onPress={handleTestNotification}
                         >
-                            <Text style={styles.testButtonText}>🧪 테스트</Text>
+                            <Text style={styles.testButtonText}>테스트</Text>
                         </TouchableOpacity>
                         {notifications.length > 0 && (
                             <TouchableOpacity
@@ -256,7 +256,7 @@ export const NotificationListModal: React.FC<NotificationListModalProps> = ({
                         disabled={loading}
                     >
                         <Text style={styles.refreshButtonText}>
-                            {loading ? '로딩 중...' : '🔄 새로고침'}
+                            {loading ? '로딩 중...' : '새로고침'}
                         </Text>
                     </TouchableOpacity>
                 </View>
