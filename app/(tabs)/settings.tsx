@@ -191,7 +191,7 @@ export default function SettingsScreen() {
                             </View>
                         ))}
                     <TouchableOpacity style={styles.button} onPress={() => setNotificationListVisible(true)}>
-                        <Text style={styles.buttonText}>📋 예약된 알림 보기</Text>
+                        <Text style={styles.buttonText}>예약된 알림 보기</Text>
                     </TouchableOpacity>
                 </View>
 
