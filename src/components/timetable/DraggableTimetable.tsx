@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React from 'react';
 import {
     View,
     Text,
@@ -7,45 +7,61 @@ import {
     Dimensions,
     PanResponder,
     TouchableOpacity,
+    ActivityIndicator,
 } from 'react-native';
-import {DayOfWeek, GridCell, Schedule} from '@/src/types/schedule';
-import { DAYS, START_HOUR, END_HOUR, TIME_SLOT_MINUTES } from '@/src/constants/timeSlots';
-import {formatTime, timeToMinutes} from '@/src/utils/timeHelpers';
+import { DayOfWeek, GridCell, Schedule } from '@/src/types/schedule';
+import { formatTime, timeToMinutes } from '@/src/utils/timeHelpers';
+// [수정] 올바른 context 경로에서 useSettings 훅을 가져옵니다.
+import { useSettings } from '../../contexts/SettingsContext';
 
 interface DraggableTimetableWithSchedulesProps {
     onSelectionComplete: (cells: GridCell[]) => void;
-    existingSchedules: Schedule[]; // 기존 시간표
+    existingSchedules: Schedule[];
 }
 
 const CELL_HEIGHT = 55;
 const TIME_COLUMN_WIDTH = 50;
-const DAY_COLUMN_WIDTH = (Dimensions.get('window').width - TIME_COLUMN_WIDTH) / DAYS.length;
-const TOTAL_GRID_HEIGHT = (END_HOUR - START_HOUR) * (60 / TIME_SLOT_MINUTES) * CELL_HEIGHT;
-const TOTAL_GRID_WIDTH = DAY_COLUMN_WIDTH * DAYS.length;
-
 
 export const DraggableTimetable: React.FC<DraggableTimetableWithSchedulesProps> = ({
                                                                                        onSelectionComplete,
                                                                                        existingSchedules,
                                                                                    }) => {
-    const [selectedCells, setSelectedCells] = useState<GridCell[]>([]);
-    const [isPaintMode, setIsPaintMode] = useState(false);
+    // [수정] useSettings 훅의 반환값 구조에 맞게 값을 가져옵니다.
+    // days와 loading은 바로 사용하고, 시간 관련 설정은 settings 객체에서 꺼내 씁니다.
+    const { settings, days, loading } = useSettings();
+    const { startHour, endHour, timeSlotMinutes } = settings;
 
-    // Stale closure 문제를 해결하기 위한 Ref들
-    const isPaintModeRef = useRef(isPaintMode);
-    useEffect(() => {
-        isPaintModeRef.current = isPaintMode;
-    }, [isPaintMode]);
+    // 동적으로 계산되는 상수들을 훅에서 값을 가져온 후 계산하도록 변경
+    const DAY_COLUMN_WIDTH = (Dimensions.get('window').width - TIME_COLUMN_WIDTH) / (days.length > 0 ? days.length : 1);
 
-    const selectedCellsRef = useRef(selectedCells);
-    useEffect(() => {
-        selectedCellsRef.current = selectedCells;
-    }, [selectedCells]);
+    // 시간 배열을 settings 값에 따라 동적으로 생성
+    const hours = React.useMemo(() => Array.from(
+        { length: (endHour - startHour) * (60 / timeSlotMinutes) },
+        (_, i) => {
+            const totalMinutes = startHour * 60 + i * timeSlotMinutes;
+            return {
+                hour: Math.floor(totalMinutes / 60),
+                minute: totalMinutes % 60,
+            };
+        }
+    ), [startHour, endHour, timeSlotMinutes]);
 
-    const startCellRef = useRef<GridCell | null>(null);
-    const dragModeRef = useRef<'paint' | 'erase' | null>(null);
-    // [수정] initialSelectionRef 대신, 드래그 시작 시점의 전체 선택 상태를 담을 ref
-    const selectionAtDragStartRef = useRef<Set<string>>(new Set());
+    const TOTAL_GRID_HEIGHT = hours.length * CELL_HEIGHT;
+    const TOTAL_GRID_WIDTH = DAY_COLUMN_WIDTH * days.length;
+
+    // ... (나머지 상태 및 핸들러 로직은 기존과 동일합니다)
+    const [selectedCells, setSelectedCells] = React.useState<GridCell[]>([]);
+    const [isPaintMode, setIsPaintMode] = React.useState(false);
+
+    const isPaintModeRef = React.useRef(isPaintMode);
+    React.useEffect(() => { isPaintModeRef.current = isPaintMode; }, [isPaintMode]);
+
+    const selectedCellsRef = React.useRef(selectedCells);
+    React.useEffect(() => { selectedCellsRef.current = selectedCells; }, [selectedCells]);
+
+    const startCellRef = React.useRef<GridCell | null>(null);
+    const dragModeRef = React.useRef<'paint' | 'erase' | null>(null);
+    const selectionAtDragStartRef = React.useRef<Set<string>>(new Set());
 
     const cellToString = (cell: GridCell): string => `${cell.day}-${cell.hour}-${cell.minute}`;
     const stringToCell = (str: string): GridCell => {
@@ -53,33 +69,22 @@ export const DraggableTimetable: React.FC<DraggableTimetableWithSchedulesProps> 
         return { day: day as DayOfWeek, hour: Number(hour), minute: Number(minute) };
     };
 
-    const hours = Array.from(
-        { length: (END_HOUR - START_HOUR) * (60 / TIME_SLOT_MINUTES) },
-        (_, i) => {
-            const totalMinutes = START_HOUR * 60 + i * TIME_SLOT_MINUTES;
-            return {
-                hour: Math.floor(totalMinutes / 60),
-                minute: totalMinutes % 60,
-            };
-        }
-    );
-
     const getCellFromCoordinates = (x: number, y: number): GridCell | null => {
         const dayIndex = Math.floor(x / DAY_COLUMN_WIDTH);
         const timeIndex = Math.floor(y / CELL_HEIGHT);
 
-        if (dayIndex < 0 || dayIndex >= DAYS.length || timeIndex < 0 || timeIndex >= hours.length) {
+        if (dayIndex < 0 || dayIndex >= days.length || timeIndex < 0 || timeIndex >= hours.length) {
             return null;
         }
 
         return {
-            day: DAYS[dayIndex],
+            day: days[dayIndex],
             hour: hours[timeIndex].hour,
             minute: hours[timeIndex].minute,
         };
     };
 
-    const panResponder = useRef(
+    const panResponder = React.useRef(
         PanResponder.create({
             onStartShouldSetPanResponder: () => isPaintModeRef.current,
             onPanResponderGrant: (evt) => {
@@ -88,11 +93,9 @@ export const DraggableTimetable: React.FC<DraggableTimetableWithSchedulesProps> 
                 if (!cell) return;
 
                 startCellRef.current = cell;
-                // [수정] 드래그 시작 시점의 현재 선택 상태를 저장합니다 (Stale state 방지)
                 selectionAtDragStartRef.current = new Set(selectedCellsRef.current.map(cellToString));
                 const cellStr = cellToString(cell);
 
-                // 시작 셀의 상태에 따라 칠하기/지우기 모드 결정
                 if (selectionAtDragStartRef.current.has(cellStr)) {
                     dragModeRef.current = 'erase';
                     selectionAtDragStartRef.current.delete(cellStr);
@@ -110,11 +113,10 @@ export const DraggableTimetable: React.FC<DraggableTimetableWithSchedulesProps> 
                 const currentCell = getCellFromCoordinates(locationX, locationY);
                 if (!currentCell) return;
 
-                // [수정] 드래그 시작 시점의 상태를 기준으로 계산을 시작합니다.
                 const newSelection = new Set(selectionAtDragStartRef.current);
 
-                const startDayIndex = DAYS.indexOf(startCell.day);
-                const currentDayIndex = DAYS.indexOf(currentCell.day);
+                const startDayIndex = days.indexOf(startCell.day);
+                const currentDayIndex = days.indexOf(currentCell.day);
                 const minDayIndex = Math.min(startDayIndex, currentDayIndex);
                 const maxDayIndex = Math.max(startDayIndex, currentDayIndex);
 
@@ -125,18 +127,20 @@ export const DraggableTimetable: React.FC<DraggableTimetableWithSchedulesProps> 
 
                 for (let d = minDayIndex; d <= maxDayIndex; d++) {
                     for (let t = minTimeIndex; t <= maxTimeIndex; t++) {
-                        const cellInRectStr = cellToString({ day: DAYS[d], hour: hours[t].hour, minute: hours[t].minute });
-                        if (dragModeRef.current === 'paint') {
-                            newSelection.add(cellInRectStr);
-                        } else if (dragModeRef.current === 'erase') {
-                            newSelection.delete(cellInRectStr);
+                        // hours 배열이 존재하지 않을 수 있으므로 방어 코드 추가
+                        if (days[d] && hours[t]) {
+                            const cellInRectStr = cellToString({ day: days[d], hour: hours[t].hour, minute: hours[t].minute });
+                            if (dragModeRef.current === 'paint') {
+                                newSelection.add(cellInRectStr);
+                            } else if (dragModeRef.current === 'erase') {
+                                newSelection.delete(cellInRectStr);
+                            }
                         }
                     }
                 }
                 setSelectedCells(Array.from(newSelection).map(stringToCell));
             },
             onPanResponderRelease: () => {
-                // [수정] 드래그가 끝나면 부모를 호출하지 않고, 내부 상태만 초기화합니다.
                 startCellRef.current = null;
                 dragModeRef.current = null;
                 selectionAtDragStartRef.current.clear();
@@ -144,13 +148,9 @@ export const DraggableTimetable: React.FC<DraggableTimetableWithSchedulesProps> 
         })
     ).current;
 
-    // [추가] '칠하기' 버튼의 동작을 수정합니다.
     const handlePaintModeToggle = () => {
         const newMode = !isPaintMode;
-        // 칠하기 모드를 켤 때는 아무것도 하지 않습니다.
         setIsPaintMode(newMode);
-
-        // 칠하기 모드를 끌 때('완료' 버튼 누를 때) 선택된 셀 정보를 부모에게 전달합니다.
         if (!newMode) {
             onSelectionComplete(selectedCellsRef.current);
         }
@@ -166,19 +166,19 @@ export const DraggableTimetable: React.FC<DraggableTimetableWithSchedulesProps> 
         if (dayOccurrences.length === 0) return null;
 
         return dayOccurrences.map((occ, idx) => {
-            const { startHour, startMinute, endHour, endMinute } = occ.timeSlot;
+            const { startHour: start_Hour, startMinute: start_Minute, endHour: end_Hour, endMinute: end_Minute } = occ.timeSlot;
 
-            const startTotalMinutes = timeToMinutes(startHour, startMinute);
-            const endTotalMinutes = timeToMinutes(endHour, endMinute);
+            const startTotalMinutes = timeToMinutes(start_Hour, start_Minute);
+            const endTotalMinutes = timeToMinutes(end_Hour, end_Minute);
 
-            const top = ((startTotalMinutes - START_HOUR * 60) / TIME_SLOT_MINUTES) * CELL_HEIGHT;
-            const height = ((endTotalMinutes - startTotalMinutes) / TIME_SLOT_MINUTES) * CELL_HEIGHT;
+            const top = ((startTotalMinutes - startHour * 60) / timeSlotMinutes) * CELL_HEIGHT;
+            const height = ((endTotalMinutes - startTotalMinutes) / timeSlotMinutes) * CELL_HEIGHT;
 
             if (top < 0 || top + height > hours.length * CELL_HEIGHT) return null;
 
             return (
                 <View
-                    key={`${schedule.id}-${day}-${startHour}-${startMinute}-${idx}`}
+                    key={`${schedule.id}-${day}-${start_Hour}-${start_Minute}-${idx}`}
                     style={[
                         styles.scheduleBlock,
                         {
@@ -197,12 +197,16 @@ export const DraggableTimetable: React.FC<DraggableTimetableWithSchedulesProps> 
         });
     };
 
+    if (loading) {
+        return <View style={styles.fullContainer}><ActivityIndicator size="large" color="#fff" /></View>;
+    }
+
     return (
         <View style={styles.fullContainer}>
             <ScrollView style={styles.container} scrollEnabled={!isPaintMode}>
                 <View style={styles.header}>
                     <View style={{ width: TIME_COLUMN_WIDTH }} />
-                    {DAYS.map(day => (
+                    {days.map(day => (
                         <View key={day} style={[styles.headerCell, { width: DAY_COLUMN_WIDTH }]}>
                             <Text style={styles.headerText}>{day}</Text>
                         </View>
@@ -212,7 +216,7 @@ export const DraggableTimetable: React.FC<DraggableTimetableWithSchedulesProps> 
                     <View style={styles.timeColumn}>
                         {hours.map(({ hour, minute }) => (
                             minute === 0 && (
-                                <View key={`${hour}-${minute}`} style={[styles.timeCell, { height: CELL_HEIGHT * 2 }]}>
+                                <View key={`${hour}-${minute}`} style={[styles.timeCell, { height: CELL_HEIGHT * (60 / timeSlotMinutes) }]}>
                                     <Text style={styles.timeText}>{formatTime(hour, 0)}</Text>
                                 </View>
                             )
@@ -220,9 +224,8 @@ export const DraggableTimetable: React.FC<DraggableTimetableWithSchedulesProps> 
                     </View>
                     <View>
                         <View style={styles.gridContainer}>
-                            {DAYS.map(day => (
+                            {days.map(day => (
                                 <View key={day} style={[styles.dayColumn, { width: DAY_COLUMN_WIDTH }]}>
-                                    {/* 배경 그리드 */}
                                     {hours.map(({ hour, minute }) => (
                                         <View
                                             key={`${hour}-${minute}`}
@@ -238,7 +241,7 @@ export const DraggableTimetable: React.FC<DraggableTimetableWithSchedulesProps> 
                                 </View>
                             ))}
                         </View>
-                        {isPaintMode && <View {...panResponder.panHandlers} style={styles.gestureContainer} />}
+                        {isPaintMode && <View {...panResponder.panHandlers} style={[styles.gestureContainer, {width: TOTAL_GRID_WIDTH, height: TOTAL_GRID_HEIGHT}]} />}
                     </View>
                 </View>
             </ScrollView>
@@ -247,129 +250,34 @@ export const DraggableTimetable: React.FC<DraggableTimetableWithSchedulesProps> 
                     style={[styles.paintButton, isPaintMode && styles.paintButtonActive]}
                     onPress={handlePaintModeToggle}
                 >
-                    <Text style={styles.paintButtonText}>
-                        {isPaintMode ? '완료' : '칠하기'}
-                    </Text>
+                    <Text style={styles.paintButtonText}>{isPaintMode ? '완료' : '칠하기'}</Text>
                 </TouchableOpacity>
             </View>
         </View>
     );
 };
 
-
 const styles = StyleSheet.create({
-    fullContainer: {
-        flex: 1,
-    },
-    container: {
-        flex: 1,
-        backgroundColor: '#000',
-    },
-    header: {
-        flexDirection: 'row',
-        borderBottomWidth: 2,
-        borderBottomColor: '#333',
-    },
-    headerCell: {
-        height: 40,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderRightWidth: 1,
-        borderRightColor: '#333',
-    },
-    headerText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
-    body: {
-        flexDirection: 'row',
-    },
-    timeColumn: {
-        width: TIME_COLUMN_WIDTH,
-    },
-    timeCell: {
-        borderBottomWidth: 1,
-        borderBottomColor: '#333',
-        borderRightWidth: 1,
-        borderRightColor: '#333',
-        justifyContent: 'flex-start',
-        alignItems: 'center',
-        paddingTop: 10,
-    },
-    timeText: {
-        color: '#888',
-        fontSize: 12,
-        position: 'relative',
-        top: -8,
-        backgroundColor: '#000',
-        paddingHorizontal: 2,
-    },
-    gridContainer: {
-        flexDirection: 'row',
-    },
-    dayColumn: {
-        width: DAY_COLUMN_WIDTH,
-        position: 'relative',
-    },
-    cell: {
-        borderBottomWidth: 1,
-        borderBottomColor: '#333',
-        borderRightWidth: 1,
-        borderRightColor: '#333',
-    },
-    selectedCell: {
-        backgroundColor: 'rgba(74, 158, 255, 0.4)',
-        borderColor: 'rgba(74, 158, 255, 0.8)',
-        borderWidth: 0.5,
-    },
-    scheduleBlock: {
-        position: 'absolute',
-        left: '2%',
-        right: '2%',
-        borderRadius: 8,
-        padding: 6,
-        justifyContent: 'space-between',
-        borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.2)',
-    },
-    scheduleText: {
-        color: 'white',
-        fontWeight: 'bold',
-        fontSize: 11,
-    },
-    scheduleRoomText: {
-        color: 'white',
-        fontSize: 9,
-        opacity: 0.8,
-        textAlign: 'right',
-    },
-    gestureContainer: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: TOTAL_GRID_WIDTH,
-        height: TOTAL_GRID_HEIGHT,
-        backgroundColor: 'transparent',
-    },
-    footer: {
-        padding: 16,
-        borderTopWidth: 1,
-        borderTopColor: '#333',
-        backgroundColor: '#1a1a1a',
-    },
-    paintButton: {
-        backgroundColor: '#333',
-        paddingVertical: 14,
-        borderRadius: 8,
-        alignItems: 'center',
-    },
-    paintButtonActive: {
-        backgroundColor: '#4a9eff',
-    },
-    paintButtonText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
+    fullContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' },
+    container: { flex: 1, width: '100%' },
+    header: { flexDirection: 'row', borderBottomWidth: 2, borderBottomColor: '#333' },
+    headerCell: { height: 40, justifyContent: 'center', alignItems: 'center', borderRightWidth: 1, borderRightColor: '#333' },
+    headerText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+    body: { flexDirection: 'row' },
+    timeColumn: { width: TIME_COLUMN_WIDTH },
+    timeCell: { borderBottomWidth: 1, borderBottomColor: '#333', borderRightWidth: 1, borderRightColor: '#333', justifyContent: 'flex-start', alignItems: 'center', paddingTop: 10 },
+    timeText: { color: '#888', fontSize: 12, position: 'relative', top: -8, backgroundColor: '#000', paddingHorizontal: 2 },
+    gridContainer: { flexDirection: 'row' },
+    dayColumn: { position: 'relative' },
+    cell: { borderBottomWidth: 1, borderBottomColor: '#333', borderRightWidth: 1, borderRightColor: '#333' },
+    selectedCell: { backgroundColor: 'rgba(74, 158, 255, 0.4)', borderColor: 'rgba(74, 158, 255, 0.8)', borderWidth: 0.5 },
+    scheduleBlock: { position: 'absolute', left: '2%', right: '2%', borderRadius: 8, padding: 6, justifyContent: 'space-between', borderWidth: 1, borderColor: 'rgba(0,0,0,0.2)' },
+    scheduleText: { color: 'white', fontWeight: 'bold', fontSize: 11 },
+    scheduleRoomText: { color: 'white', fontSize: 9, opacity: 0.8, textAlign: 'right' },
+    gestureContainer: { position: 'absolute', top: 0, left: 0, backgroundColor: 'transparent' },
+    footer: { padding: 16, borderTopWidth: 1, borderTopColor: '#333', backgroundColor: '#1a1a1a', width: '100%' },
+    paintButton: { backgroundColor: '#333', paddingVertical: 14, borderRadius: 8, alignItems: 'center' },
+    paintButtonActive: { backgroundColor: '#4a9eff' },
+    paintButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 });
+

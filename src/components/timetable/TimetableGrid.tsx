@@ -1,24 +1,28 @@
 import React, { memo } from 'react';
 import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity } from 'react-native';
 import { Schedule, DayOfWeek } from '@/src/types/schedule';
-import { DAYS, START_HOUR, END_HOUR, TIME_SLOT_MINUTES } from '@/src/constants/timeSlots';
 import { formatTime, timeToMinutes } from '@/src/utils/timeHelpers';
+import { useSettings } from '../../contexts/SettingsContext';
 
 interface TimetableGridProps {
     schedules: Schedule[];
-    onSchedulePress?: (schedule: Schedule) => void; // 필요하면 (schedule, occurrence)로 확장 가능
+    onSchedulePress?: (schedule: Schedule) => void;
 }
 
-const CELL_HEIGHT = 55; // 30분당 높이
+const CELL_HEIGHT = 55;
 const TIME_COLUMN_WIDTH = 50;
-const DAY_COLUMN_WIDTH = (Dimensions.get('window').width - TIME_COLUMN_WIDTH) / DAYS.length;
 
 export const TimetableGrid: React.FC<TimetableGridProps> = memo(({ schedules, onSchedulePress }) => {
-    // 30분 단위 슬롯(배경 그리드용)
+    const { settings, days, loading } = useSettings();
+    const { startHour, endHour, timeSlotMinutes } = settings;
+
+    const DAY_COLUMN_WIDTH = (Dimensions.get('window').width - TIME_COLUMN_WIDTH) / days.length;
+
+    // 시간 슬롯 생성 (설정값 기반)
     const timeSlots = Array.from(
-        { length: (END_HOUR - START_HOUR) * (60 / TIME_SLOT_MINUTES) },
+        { length: (endHour - startHour) * (60 / timeSlotMinutes) },
         (_, i) => {
-            const totalMinutes = START_HOUR * 60 + i * TIME_SLOT_MINUTES;
+            const totalMinutes = startHour * 60 + i * timeSlotMinutes;
             return {
                 hour: Math.floor(totalMinutes / 60),
                 minute: totalMinutes % 60,
@@ -26,29 +30,28 @@ export const TimetableGrid: React.FC<TimetableGridProps> = memo(({ schedules, on
         }
     );
 
-    // 시간 레이블(1시간 단위)
-    const displayHours = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i);
+    // 시간 레이블 (1시간 단위)
+    const displayHours = Array.from({ length: endHour - startHour }, (_, i) => startHour + i);
 
-    // 변경 포인트: 특정 day에 대해 schedule의 occurrences 중 day가 일치하는 것만 렌더
     const renderScheduleForDay = (schedule: Schedule, day: DayOfWeek) => {
         const dayOccurrences = schedule.occurrences?.filter(o => o.day === day) ?? [];
         if (dayOccurrences.length === 0) return null;
 
         return dayOccurrences.map((occ, idx) => {
-            const { startHour, startMinute, endHour, endMinute } = occ.timeSlot;
+            const { startHour: occStartHour, startMinute, endHour: occEndHour, endMinute } = occ.timeSlot;
 
-            const startTotalMinutes = timeToMinutes(startHour, startMinute);
-            const endTotalMinutes = timeToMinutes(endHour, endMinute);
+            const startTotalMinutes = timeToMinutes(occStartHour, startMinute);
+            const endTotalMinutes = timeToMinutes(occEndHour, endMinute);
 
-            const top = ((startTotalMinutes - START_HOUR * 60) / TIME_SLOT_MINUTES) * CELL_HEIGHT;
-            const height = ((endTotalMinutes - startTotalMinutes) / TIME_SLOT_MINUTES) * CELL_HEIGHT;
+            const top = ((startTotalMinutes - startHour * 60) / timeSlotMinutes) * CELL_HEIGHT;
+            const height = ((endTotalMinutes - startTotalMinutes) / timeSlotMinutes) * CELL_HEIGHT;
 
             // 그리드 범위를 벗어나는 occurrence는 스킵
             if (top < 0 || top + height > timeSlots.length * CELL_HEIGHT) return null;
 
             return (
                 <TouchableOpacity
-                    key={`${schedule.id}-${day}-${startHour}-${startMinute}-${endHour}-${endMinute}-${idx}`}
+                    key={`${schedule.id}-${day}-${occStartHour}-${startMinute}-${occEndHour}-${endMinute}-${idx}`}
                     style={[styles.scheduleBlock, { top, height, backgroundColor: schedule.color }]}
                     onPress={() => onSchedulePress?.(schedule)}
                     activeOpacity={0.8}
@@ -60,12 +63,20 @@ export const TimetableGrid: React.FC<TimetableGridProps> = memo(({ schedules, on
         });
     };
 
+    if (loading) {
+        return (
+            <View style={styles.loadingContainer}>
+                <Text style={styles.loadingText}>로딩 중...</Text>
+            </View>
+        );
+    }
+
     return (
         <ScrollView style={styles.container}>
             {/* 헤더: 요일 */}
             <View style={styles.header}>
                 <View style={{ width: TIME_COLUMN_WIDTH }} />
-                {DAYS.map(day => (
+                {days.map(day => (
                     <View key={`hdr-${day}`} style={[styles.headerCell, { width: DAY_COLUMN_WIDTH }]}>
                         <Text style={styles.headerText}>{day}</Text>
                     </View>
@@ -78,7 +89,7 @@ export const TimetableGrid: React.FC<TimetableGridProps> = memo(({ schedules, on
                     {displayHours.map(hour => (
                         <View
                             key={`time-${hour}`}
-                            style={[styles.timeCell, { height: CELL_HEIGHT * (60 / TIME_SLOT_MINUTES) }]}
+                            style={[styles.timeCell, { height: CELL_HEIGHT * (60 / timeSlotMinutes) }]}
                         >
                             <Text style={styles.timeText}>{formatTime(hour, 0)}</Text>
                         </View>
@@ -86,9 +97,9 @@ export const TimetableGrid: React.FC<TimetableGridProps> = memo(({ schedules, on
                 </View>
 
                 {/* 요일별 컬럼 */}
-                {DAYS.map(day => (
+                {days.map(day => (
                     <View key={`col-${day}`} style={[styles.dayColumn, { width: DAY_COLUMN_WIDTH }]}>
-                        {/* 배경 그리드(30분 단위) */}
+                        {/* 배경 그리드 */}
                         {timeSlots.map(({ hour, minute }) => (
                             <View
                                 key={`bg-${day}-${hour}-${minute}`}
@@ -96,7 +107,7 @@ export const TimetableGrid: React.FC<TimetableGridProps> = memo(({ schedules, on
                             />
                         ))}
 
-                        {/* 스케줄 블록(occurrences 기반) */}
+                        {/* 스케줄 블록 */}
                         {schedules.map(schedule => renderScheduleForDay(schedule, day))}
                     </View>
                 ))}
@@ -107,6 +118,8 @@ export const TimetableGrid: React.FC<TimetableGridProps> = memo(({ schedules, on
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#000' },
+    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' },
+    loadingText: { color: '#fff', fontSize: 16 },
     header: { flexDirection: 'row', borderBottomWidth: 2, borderBottomColor: '#333' },
     headerCell: { height: 40, justifyContent: 'center', alignItems: 'center', borderRightWidth: 1, borderRightColor: '#333' },
     headerText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
